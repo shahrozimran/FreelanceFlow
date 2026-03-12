@@ -2,18 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wallet, Briefcase, Activity, RefreshCw, TrendingUp, Plus, 
-  X, Trash2, Edit3, Save, Globe, Search, RotateCcw, Archive, FileText, CheckSquare, Square, ListChecks
+  X, Trash2, Edit3, Save, Globe, Search, RotateCcw, Archive, FileText, CheckSquare, Square, ListChecks, Info
 } from 'lucide-react';
 import axios from 'axios';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './App.css';
 
-const SHEET_ID = "1ks1kqNq6rHshI-WUr9YYzQzCGLtzF5Nvrocxo972Fio"; 
-const API_KEY = "AIzaSyDztCY5Q_3U6JZdJVukZ5V3OAa0RI510U8"; 
-const RANGE = "Sheet1!A2:E50"; 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzcb6ccpdvYFGpyahVY8J-Zban4KrazXVzpbH__HmJwQs91Xny3_ep5ePJl5mJUl9vtA/exec"; 
-
+const SHEET_ID = import.meta.env.VITE_SHEET_ID;
+const API_KEY = import.meta.env.VITE_API_KEY;
+const RANGE = "Sheet1!A2:E50"; // Range is fine to keep here
+const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL;
 export default function App() {
   const [projects, setProjects] = useState([]);
   const [selectedIndices, setSelectedIndices] = useState([]); 
@@ -63,6 +62,7 @@ export default function App() {
     return Number(pkrAmount) * rate;
   };
 
+  // --- PDF LOGIC (With Totals & Unique Clients) ---
   const generatePDF = (items) => {
     if (!items || items.length === 0) return;
     
@@ -70,11 +70,10 @@ export default function App() {
       const doc = new jsPDF();
       const date = new Date().toLocaleDateString();
       const uniqueClients = [...new Set(items.map(item => item.data[1]))].join(", ");
-
-      const totalSum = items.reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
+      const totalSumRaw = items.reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
       const formattedTotal = targetCurrency === 'PKR' 
-        ? `Rs. ${totalSum.toLocaleString()}` 
-        : `${convert(totalSum).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
+        ? `Rs. ${totalSumRaw.toLocaleString()}` 
+        : `${convert(totalSumRaw).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
 
       doc.setFillColor(59, 130, 246);
       doc.rect(0, 0, 210, 40, 'F');
@@ -99,6 +98,7 @@ export default function App() {
           : `${convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`
       ]);
 
+      // Add Total Row to PDF Table
       tableBody.push([
         { content: 'TOTAL AMOUNT', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
         { content: formattedTotal, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }
@@ -125,6 +125,7 @@ export default function App() {
     }
   };
 
+  // --- SELECTION LOGIC ---
   const toggleSelect = (idx) => {
     setSelectedIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
   };
@@ -144,6 +145,15 @@ export default function App() {
       .map(p => p.originalIndex);
     setSelectedIndices(prev => Array.from(new Set([...prev, ...clientIndices])));
   };
+
+  // Calculate selection sum for UI floating bar
+  const selectedTotalRaw = projects
+    .filter(p => selectedIndices.includes(p.originalIndex))
+    .reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
+  
+  const selectedTotalFormatted = targetCurrency === 'PKR' 
+    ? `Rs. ${selectedTotalRaw.toLocaleString()}` 
+    : `${convert(selectedTotalRaw).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
@@ -280,7 +290,7 @@ export default function App() {
       <div className="grid">
         <StatCard title="Portfolio Value" value={formattedTotal} icon={<Wallet />} color="#10b981" />
         <StatCard title={`${view === 'active' ? 'Active' : 'Archived'} Projects`} value={filteredProjects.length} icon={<Briefcase />} color="#3b82f6" />
-        <StatCard title={`Live Rate (1 PKR)`} value={allRates[targetCurrency]?.toFixed(4) || "0.00"} icon={<Activity />} color="#f59e0b" />
+        <StatCard title={`Rate: 1 PKR`} value={allRates[targetCurrency]?.toFixed(4) || "1.00"} icon={<Activity />} color="#f59e0b" />
       </div>
 
       <div className="table-container">
@@ -293,11 +303,7 @@ export default function App() {
                   {selectedIndices.length === filteredProjects.length && filteredProjects.length > 0 ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} color="#64748b" />}
                 </button>
               </th>
-              <th>PROJECT</th>
-              <th>CLIENT</th>
-              <th>CATEGORY</th>
-              <th style={{textAlign: 'right'}}>VALUE</th>
-              <th style={{textAlign: 'center'}}>ACTIONS</th>
+              <th>PROJECT</th><th>CLIENT</th><th>CATEGORY</th><th style={{textAlign: 'right'}}>VALUE</th><th style={{textAlign: 'center'}}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -337,6 +343,22 @@ export default function App() {
           </tbody>
         </table>
       </div>
+
+      {/* Floating Selection Bar */}
+      <AnimatePresence>
+        {selectedIndices.length > 0 && (
+          <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="selection-bar">
+            <div className="selection-info">
+              <Info size={18} color="#3b82f6" />
+              <span>{selectedIndices.length} items selected</span>
+            </div>
+            <div className="selection-sum">
+              <span className="sum-label">Selected Total:</span>
+              <span className="sum-value">{selectedTotalFormatted}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
