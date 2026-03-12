@@ -42,7 +42,7 @@
 /* --- Search Bar Section --- */
 .search-container {
   margin-bottom: 30px;
-  position: relative; /* Necessary for absolute positioning of suggestions */
+  position: relative;
   max-width: 600px;
 }
 
@@ -55,7 +55,7 @@
   border-radius: 12px;
   transition: border-color 0.2s, box-shadow 0.2s;
   position: relative;
-  z-index: 1001; /* Stay above the dropdown list */
+  z-index: 1001;
 }
 
 .search-wrapper:focus-within {
@@ -91,22 +91,21 @@
   font-size: 0.85rem;
   cursor: pointer;
   border-radius: 0 8px 8px 0;
-  transition: color 0.2s;
 }
 
-/* --- NEW Suggestion Dropdown Styles --- */
+/* --- Suggestion Dropdown --- */
 .suggestion-dropdown {
   position: absolute;
-  top: 100%; /* Appears right below search wrapper */
+  top: 100%;
   left: 0;
   right: 0;
   background: #161b2b;
-  border: 1px solid #3b82f6; /* Matching focus color */
+  border: 1px solid #3b82f6;
   border-top: none;
   border-radius: 0 0 12px 12px;
   list-style: none;
   padding: 0;
-  margin-top: -5px; /* Slight overlap for seamless look */
+  margin-top: -5px;
   z-index: 1000;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
   overflow: hidden;
@@ -130,7 +129,7 @@
 .suggestion-item:hover {
   background: #1e293b;
   color: #60a5fa;
-  padding-left: 20px; /* "Push" effect like Google */
+  padding-left: 20px;
 }
 
 /* --- Currency Selector --- */
@@ -165,7 +164,7 @@
   font-family: inherit;
 }
 
-/* --- Buttons --- */
+/* --- Buttons & View Toggles --- */
 .toggle-btn, .refresh-btn {
   background: #1e293b;
   border: 1px solid #334155;
@@ -184,6 +183,13 @@
 .toggle-btn:hover, .refresh-btn:hover {
   background: #334155;
   border-color: #475569;
+}
+
+/* NEW: Highlight for when Trash/Archive is active */
+.active-trash {
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
 /* --- Stats Grid --- */
@@ -321,6 +327,11 @@ td {
 
 .action-icon-btn:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+/* Specific hover color for the Restore icon */
+.action-icon-btn[title="Restore Project"]:hover {
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .spin {

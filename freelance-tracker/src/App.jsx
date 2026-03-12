@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, Briefcase, Activity, RefreshCw, TrendingUp, Plus, X, Trash2, Edit3, Save, Globe, Search } from 'lucide-react';
+import { Wallet, Briefcase, Activity, RefreshCw, TrendingUp, Plus, X, Trash2, Edit3, Save, Globe, Search, RotateCcw, Archive } from 'lucide-react';
 import axios from 'axios';
 import './App.css';
 
@@ -16,6 +16,7 @@ export default function App() {
   const [targetCurrency, setTargetCurrency] = useState('PKR');
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(null);
+  const [view, setView] = useState('active'); // 'active' or 'trash'
   
   // Search & Suggestion States
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,21 +33,11 @@ export default function App() {
       const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
       const rateUrl = 'https://open.er-api.com/v6/latest/PKR';
       const [sheetRes, rateRes] = await Promise.all([axios.get(sheetUrl), axios.get(rateUrl)]);
-      
       const rawValues = sheetRes.data.values || [];
       
-      // PROCESS & FILTER: 
-      // 1. Map row to original index for targeting.
-      // 2. Filter out rows where Project Name is empty OR Status (Index 2) is "Disabled".
-      const processedData = rawValues
-        .map((row, index) => ({ data: row, originalIndex: index }))
-        .filter(item => 
-          item.data[0] && 
-          item.data[0].trim() !== "" && 
-          item.data[2] !== "Disabled"
-        );
-
-      setProjects(processedData);
+      // Store original index for correct row targeting in Google Sheets
+      const processedData = rawValues.map((row, index) => ({ data: row, originalIndex: index }));
+      setProjects(processedData.filter(item => item.data[0] && item.data[0].trim() !== ""));
       setAllRates(rateRes.data.rates);
     } catch (err) { console.error("Fetch Error:", err.message); }
     finally { setLoading(false); }
@@ -69,7 +60,9 @@ export default function App() {
 
     if (value.length > 0) {
       const colIndex = searchCriteria === 'name' ? 0 : searchCriteria === 'client' ? 1 : 4;
+      // Filter suggestions based on current view (Active/Trash)
       const matches = projects
+        .filter(p => (view === 'active' ? p.data[2] !== "Disabled" : p.data[2] === "Disabled"))
         .map(p => p.data[colIndex])
         .filter((val, index, self) => 
           val && val.toLowerCase().includes(value.toLowerCase()) && self.indexOf(val) === index
@@ -88,6 +81,10 @@ export default function App() {
   };
 
   const filteredProjects = projects.filter(item => {
+    // Filter by Active/Disabled Status first
+    const isCorrectView = view === 'active' ? item.data[2] !== "Disabled" : item.data[2] === "Disabled";
+    if (!isCorrectView) return false;
+
     const val = searchQuery.toLowerCase();
     if (searchCriteria === 'name') return item.data[0].toLowerCase().includes(val);
     if (searchCriteria === 'client') return item.data[1].toLowerCase().includes(val);
@@ -108,18 +105,32 @@ export default function App() {
   };
 
   const deleteProject = async (originalIndex) => {
-    if (!window.confirm("Mark this project as disabled?")) return;
+    if (!window.confirm("Archive this project? It will be moved to the Trash.")) return;
     
     // Optimistic Update: Hide from UI immediately
     setProjects(prev => prev.filter(item => item.originalIndex !== originalIndex));
     
     try {
-      // Tells Apps Script to set status to "Disabled"
       await axios.post(SCRIPT_URL, JSON.stringify({ action: "DELETE", rowIndex: originalIndex }));
       setTimeout(fetchData, 1500);
     } catch (err) { 
       alert("Server sync failed. Refreshing..."); 
       fetchData(); 
+    }
+  };
+
+  const restoreProject = async (originalIndex) => {
+    setLoading(true);
+    try {
+      // Custom RESTORE action for Apps Script
+      await axios.post(SCRIPT_URL, JSON.stringify({ action: "RESTORE", rowIndex: originalIndex }));
+      setTimeout(() => {
+        fetchData();
+        setView('active'); // Switch back to active view to show restored item
+      }, 1500);
+    } catch (err) { 
+      alert("Restore failed."); 
+      setLoading(false);
     }
   };
 
@@ -142,7 +153,8 @@ export default function App() {
     return Number(pkrAmount) * rate;
   };
 
-  const totalPKR = projects.reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
+  // Portfolio value should only count Active projects
+  const totalPKR = projects.filter(p => p.data[2] !== "Disabled").reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
   const formattedTotal = targetCurrency === 'PKR' 
     ? `Rs. ${totalPKR.toLocaleString()}` 
     : `${convert(totalPKR).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
@@ -152,6 +164,15 @@ export default function App() {
       <header className="top-nav">
         <div className="brand"><TrendingUp className="logo-icon" size={28} /><h1>Freelance<span>Flow</span></h1></div>
         <div className="actions">
+          {/* View Toggle Button */}
+          <button 
+            className={`toggle-btn ${view === 'trash' ? 'active-trash' : ''}`} 
+            onClick={() => setView(view === 'active' ? 'trash' : 'active')}
+          >
+            {view === 'active' ? <Archive size={18} /> : <Briefcase size={18} />}
+            {view === 'active' ? "Trash" : "Back to Active"}
+          </button>
+
           <div className="currency-selector-wrapper">
             <Globe size={16} className="globe-icon" />
             <select className="toggle-btn" value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value)}>
@@ -170,7 +191,7 @@ export default function App() {
           <Search size={18} className="search-icon" />
           <input 
             type="text" 
-            placeholder={`Search by ${searchCriteria}...`} 
+            placeholder={`Search ${view} by ${searchCriteria}...`} 
             value={searchQuery}
             onChange={handleSearchChange}
             onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)}
@@ -220,12 +241,15 @@ export default function App() {
       </AnimatePresence>
 
       <div className="grid">
-        <StatCard title="Total Revenue" value={formattedTotal} icon={<Wallet />} color="#10b981" />
-        <StatCard title="Total Projects" value={projects.length} icon={<Briefcase />} color="#3b82f6" />
+        <StatCard title="Portfolio Value" value={formattedTotal} icon={<Wallet />} color="#10b981" />
+        <StatCard title={`${view === 'active' ? 'Active' : 'Archived'} Count`} value={filteredProjects.length} icon={<Briefcase />} color="#3b82f6" />
         <StatCard title={`Rate: 1/${targetCurrency}`} value={allRates[targetCurrency]?.toFixed(4) || "0.00"} icon={<Activity />} color="#f59e0b" />
       </div>
 
       <div className="table-container">
+        <div className="table-header">
+           <h2>{view === 'active' ? "Active Pipeline" : "Trash / Archive"}</h2>
+        </div>
         <table>
           <thead>
             <tr><th>PROJECT</th><th>CLIENT</th><th>CATEGORY</th><th style={{textAlign: 'right'}}>VALUE</th><th style={{textAlign: 'center'}}>ACTIONS</th></tr>
@@ -241,15 +265,21 @@ export default function App() {
                       {targetCurrency === 'PKR' ? `Rs. ${Number(item.data[3]).toLocaleString()}` : convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})}
                   </td>
                   <td style={{textAlign: 'center'}}>
-                    <button onClick={() => startEdit(item)} className="action-icon-btn"><Edit3 size={16} color="#60a5fa"/></button>
-                    <button onClick={() => deleteProject(item.originalIndex)} className="action-icon-btn"><Trash2 size={16} color="#ef4444"/></button>
+                    {view === 'active' ? (
+                      <>
+                        <button onClick={() => startEdit(item)} className="action-icon-btn"><Edit3 size={16} color="#60a5fa"/></button>
+                        <button onClick={() => deleteProject(item.originalIndex)} className="action-icon-btn"><Trash2 size={16} color="#ef4444"/></button>
+                      </>
+                    ) : (
+                      <button onClick={() => restoreProject(item.originalIndex)} className="action-icon-btn" title="Restore Project"><RotateCcw size={16} color="#10b981"/></button>
+                    )}
                   </td>
                 </motion.tr>
               ))}
             </AnimatePresence>
           </tbody>
         </table>
-        {filteredProjects.length === 0 && <div className="empty-state">No matching projects found.</div>}
+        {filteredProjects.length === 0 && <div className="empty-state">No matching projects found in {view}.</div>}
       </div>
     </div>
   );
