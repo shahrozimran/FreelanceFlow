@@ -1,24 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wallet, Briefcase, Activity, RefreshCw, TrendingUp, Plus, X, Trash2, Edit3, Save, Globe, Search, RotateCcw, Archive } from 'lucide-react';
+import { 
+  Wallet, Briefcase, Activity, RefreshCw, TrendingUp, Plus, 
+  X, Trash2, Edit3, Save, Globe, Search, RotateCcw, Archive, FileText, CheckSquare, Square, ListChecks
+} from 'lucide-react';
 import axios from 'axios';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable'; // Updated import for manual registration
 import './App.css';
 
 const SHEET_ID = "1ks1kqNq6rHshI-WUr9YYzQzCGLtzF5Nvrocxo972Fio"; 
 const API_KEY = "AIzaSyDztCY5Q_3U6JZdJVukZ5V3OAa0RI510U8"; 
 const RANGE = "Sheet1!A2:E50"; 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-uPYzIh4FdSQp6XrV4OZXipgiAHPPCtyQZ9184quk1hcRVZ-VteImq61KYVli4_g8Rg/exec"; 
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzcb6ccpdvYFGpyahVY8J-Zban4KrazXVzpbH__HmJwQs91Xny3_ep5ePJl5mJUl9vtA/exec"; 
 
 export default function App() {
   const [projects, setProjects] = useState([]);
+  const [selectedIndices, setSelectedIndices] = useState([]); 
   const [allRates, setAllRates] = useState({});
   const [loading, setLoading] = useState(true);
   const [targetCurrency, setTargetCurrency] = useState('PKR');
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(null);
-  const [view, setView] = useState('active'); // 'active' or 'trash'
+  const [view, setView] = useState('active'); 
   
-  // Search & Suggestion States
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCriteria, setSearchCriteria] = useState('name');
   const [suggestions, setSuggestions] = useState([]);
@@ -34,8 +39,6 @@ export default function App() {
       const rateUrl = 'https://open.er-api.com/v6/latest/PKR';
       const [sheetRes, rateRes] = await Promise.all([axios.get(sheetUrl), axios.get(rateUrl)]);
       const rawValues = sheetRes.data.values || [];
-      
-      // Store original index for correct row targeting in Google Sheets
       const processedData = rawValues.map((row, index) => ({ data: row, originalIndex: index }));
       setProjects(processedData.filter(item => item.data[0] && item.data[0].trim() !== ""));
       setAllRates(rateRes.data.rates);
@@ -54,25 +57,92 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const convert = (pkrAmount) => {
+    if (targetCurrency === 'PKR') return Number(pkrAmount);
+    const rate = allRates[targetCurrency] || 0;
+    return Number(pkrAmount) * rate;
+  };
+
+  // --- UPDATED PDF LOGIC (Manual Registration) ---
+  const generatePDF = (items) => {
+    if (!items || items.length === 0) return;
+    
+    try {
+      const doc = new jsPDF();
+      const date = new Date().toLocaleDateString();
+      const clientName = items[0].data[1];
+
+      // Header Branding
+      doc.setFillColor(59, 130, 246);
+      doc.rect(0, 0, 210, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont("helvetica", "bold");
+      doc.text("FreelanceFlow", 20, 25);
+      doc.setFontSize(10);
+      doc.text(items.length > 1 ? "BULK PROJECT SUMMARY" : "PROJECT INVOICE", 140, 25);
+
+      // Client Details
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(12);
+      doc.text(`Client: ${clientName}`, 20, 60);
+      doc.text(`Date: ${date}`, 20, 68);
+
+      // Map Items for Table
+      const tableBody = items.map(item => [
+        item.data[0],
+        item.data[4],
+        targetCurrency === 'PKR' 
+          ? `Rs. ${Number(item.data[3]).toLocaleString()}` 
+          : `${convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`
+      ]);
+
+      // Call autoTable directly as a function
+      autoTable(doc, {
+        startY: 80,
+        head: [['Project Name', 'Category', 'Total Value']],
+        body: tableBody,
+        headStyles: { fillColor: [59, 130, 246] },
+        theme: 'grid'
+      });
+
+      // Calculate final position
+      const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 150;
+      doc.setFontSize(10);
+      doc.text("Thank you for your business!", 20, finalY);
+      
+      doc.save(`${clientName.replace(/\s+/g, '_')}_FF_Invoice.pdf`);
+      setSelectedIndices([]); // Reset selection
+    } catch (error) {
+      console.error("PDF Generation Error:", error);
+      alert("Failed to generate PDF. Make sure jspdf-autotable is installed.");
+    }
+  };
+
+  const toggleSelect = (idx) => {
+    setSelectedIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
+  };
+
+  const selectAllForClient = (clientName) => {
+    const clientIndices = filteredProjects
+      .filter(p => p.data[1] === clientName)
+      .map(p => p.originalIndex);
+    setSelectedIndices(prev => Array.from(new Set([...prev, ...clientIndices])));
+  };
+
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
-
     if (value.length > 0) {
       const colIndex = searchCriteria === 'name' ? 0 : searchCriteria === 'client' ? 1 : 4;
-      // Filter suggestions based on current view (Active/Trash)
       const matches = projects
         .filter(p => (view === 'active' ? p.data[2] !== "Disabled" : p.data[2] === "Disabled"))
         .map(p => p.data[colIndex])
-        .filter((val, index, self) => 
-          val && val.toLowerCase().includes(value.toLowerCase()) && self.indexOf(val) === index
-        )
+        .filter((val, index, self) => val && val.toLowerCase().includes(value.toLowerCase()) && self.indexOf(val) === index)
         .slice(0, 5);
       setSuggestions(matches);
       setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
+    } else { setShowSuggestions(false); }
   };
 
   const selectSuggestion = (val) => {
@@ -81,16 +151,31 @@ export default function App() {
   };
 
   const filteredProjects = projects.filter(item => {
-    // Filter by Active/Disabled Status first
     const isCorrectView = view === 'active' ? item.data[2] !== "Disabled" : item.data[2] === "Disabled";
     if (!isCorrectView) return false;
-
     const val = searchQuery.toLowerCase();
     if (searchCriteria === 'name') return item.data[0].toLowerCase().includes(val);
     if (searchCriteria === 'client') return item.data[1].toLowerCase().includes(val);
     if (searchCriteria === 'category') return item.data[4].toLowerCase().includes(val);
     return true;
   });
+
+  const deleteProject = async (originalIndex) => {
+    if (!window.confirm("Archive this project?")) return;
+    setProjects(prev => prev.filter(item => item.originalIndex !== originalIndex));
+    try {
+      await axios.post(SCRIPT_URL, JSON.stringify({ action: "DELETE", rowIndex: originalIndex }));
+      setTimeout(fetchData, 1500);
+    } catch (err) { fetchData(); }
+  };
+
+  const restoreProject = async (originalIndex) => {
+    setLoading(true);
+    try {
+      await axios.post(SCRIPT_URL, JSON.stringify({ action: "RESTORE", rowIndex: originalIndex }));
+      setTimeout(() => { fetchData(); setView('active'); }, 1500);
+    } catch (err) { alert("Restore failed. Check Apps Script."); setLoading(false); }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -100,38 +185,7 @@ export default function App() {
       await axios.post(SCRIPT_URL, JSON.stringify(payload));
       resetForm();
       setTimeout(fetchData, 2000); 
-    } catch (err) { alert("Action failed."); }
-    finally { setLoading(false); }
-  };
-
-  const deleteProject = async (originalIndex) => {
-    if (!window.confirm("Archive this project? It will be moved to the Trash.")) return;
-    
-    // Optimistic Update: Hide from UI immediately
-    setProjects(prev => prev.filter(item => item.originalIndex !== originalIndex));
-    
-    try {
-      await axios.post(SCRIPT_URL, JSON.stringify({ action: "DELETE", rowIndex: originalIndex }));
-      setTimeout(fetchData, 1500);
-    } catch (err) { 
-      alert("Server sync failed. Refreshing..."); 
-      fetchData(); 
-    }
-  };
-
-  const restoreProject = async (originalIndex) => {
-    setLoading(true);
-    try {
-      // Custom RESTORE action for Apps Script
-      await axios.post(SCRIPT_URL, JSON.stringify({ action: "RESTORE", rowIndex: originalIndex }));
-      setTimeout(() => {
-        fetchData();
-        setView('active'); // Switch back to active view to show restored item
-      }, 1500);
-    } catch (err) { 
-      alert("Restore failed."); 
-      setLoading(false);
-    }
+    } catch (err) { alert("Action failed."); setLoading(false); }
   };
 
   const startEdit = (item) => {
@@ -147,32 +201,22 @@ export default function App() {
     setShowForm(false);
   };
 
-  const convert = (pkrAmount) => {
-    if (targetCurrency === 'PKR') return Number(pkrAmount);
-    const rate = allRates[targetCurrency] || 0;
-    return Number(pkrAmount) * rate;
-  };
-
-  // Portfolio value should only count Active projects
   const totalPKR = projects.filter(p => p.data[2] !== "Disabled").reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
-  const formattedTotal = targetCurrency === 'PKR' 
-    ? `Rs. ${totalPKR.toLocaleString()}` 
-    : `${convert(totalPKR).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
+  const formattedTotal = targetCurrency === 'PKR' ? `Rs. ${totalPKR.toLocaleString()}` : `${convert(totalPKR).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
 
   return (
     <div className="dashboard">
       <header className="top-nav">
         <div className="brand"><TrendingUp className="logo-icon" size={28} /><h1>Freelance<span>Flow</span></h1></div>
         <div className="actions">
-          {/* View Toggle Button */}
-          <button 
-            className={`toggle-btn ${view === 'trash' ? 'active-trash' : ''}`} 
-            onClick={() => setView(view === 'active' ? 'trash' : 'active')}
-          >
-            {view === 'active' ? <Archive size={18} /> : <Briefcase size={18} />}
-            {view === 'active' ? "Trash" : "Back to Active"}
+          {selectedIndices.length > 0 && (
+            <button className="toggle-btn" style={{background: '#10b981', border: 'none', color: 'white'}} onClick={() => generatePDF(projects.filter(p => selectedIndices.includes(p.originalIndex)))}>
+              <FileText size={18} /> Export Selected ({selectedIndices.length})
+            </button>
+          )}
+          <button className={`toggle-btn ${view === 'trash' ? 'active-trash' : ''}`} onClick={() => setView(view === 'active' ? 'trash' : 'active')}>
+            {view === 'active' ? <Archive size={18} /> : <Briefcase size={18} />} {view === 'active' ? "Trash" : "Back to Active"}
           </button>
-
           <div className="currency-selector-wrapper">
             <Globe size={16} className="globe-icon" />
             <select className="toggle-btn" value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value)}>
@@ -189,35 +233,15 @@ export default function App() {
       <div className="search-container" ref={suggestionRef}>
         <div className="search-wrapper">
           <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder={`Search ${view} by ${searchCriteria}...`} 
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)}
-            className="search-input"
-          />
+          <input type="text" placeholder={`Search by ${searchCriteria}...`} value={searchQuery} onChange={handleSearchChange} onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)} className="search-input" />
           <select className="search-criteria-select" value={searchCriteria} onChange={(e) => setSearchCriteria(e.target.value)}>
-            <option value="name">Project</option>
-            <option value="client">Client</option>
-            <option value="category">Category</option>
+            <option value="name">Project</option><option value="client">Client</option><option value="category">Category</option>
           </select>
         </div>
-
         <AnimatePresence>
           {showSuggestions && suggestions.length > 0 && (
-            <motion.ul 
-              initial={{ opacity: 0, y: -10 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0 }}
-              className="suggestion-dropdown"
-            >
-              {suggestions.map((item, i) => (
-                <li key={i} onClick={() => selectSuggestion(item)} className="suggestion-item">
-                  <Search size={14} style={{marginRight: '10px', opacity: 0.5}} />
-                  {item}
-                </li>
-              ))}
+            <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="suggestion-dropdown">
+              {suggestions.map((item, i) => <li key={i} onClick={() => selectSuggestion(item)} className="suggestion-item"><Search size={14} style={{marginRight: '10px', opacity: 0.5}} />{item}</li>)}
             </motion.ul>
           )}
         </AnimatePresence>
@@ -232,9 +256,7 @@ export default function App() {
               <input className="toggle-btn text-left" placeholder="Client Name" required value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
               <input className="toggle-btn text-left" type="number" placeholder="Earnings" required value={formData.earnings} onChange={e => setFormData({...formData, earnings: e.target.value})} />
               <input className="toggle-btn text-left" placeholder="Category" required value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
-              <button type="submit" className="refresh-btn submit-btn">
-                <Save size={18} /> {isEditing !== null ? "Update Project" : "Save Project"}
-              </button>
+              <button type="submit" className="refresh-btn submit-btn"><Save size={18} /> {isEditing !== null ? "Update Project" : "Save Project"}</button>
             </form>
           </motion.div>
         )}
@@ -247,28 +269,44 @@ export default function App() {
       </div>
 
       <div className="table-container">
-        <div className="table-header">
-           <h2>{view === 'active' ? "Active Pipeline" : "Trash / Archive"}</h2>
-        </div>
+        <div className="table-header"><h2>{view === 'active' ? "Active Pipeline" : "Trash / Archive"}</h2></div>
         <table>
           <thead>
-            <tr><th>PROJECT</th><th>CLIENT</th><th>CATEGORY</th><th style={{textAlign: 'right'}}>VALUE</th><th style={{textAlign: 'center'}}>ACTIONS</th></tr>
+            <tr>
+              <th style={{width: '50px'}}>SEL</th>
+              <th>PROJECT</th>
+              <th>CLIENT</th>
+              <th>CATEGORY</th>
+              <th style={{textAlign: 'right'}}>VALUE</th>
+              <th style={{textAlign: 'center'}}>ACTIONS</th>
+            </tr>
           </thead>
           <tbody>
             <AnimatePresence>
               {filteredProjects.map((item) => (
                 <motion.tr layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key={item.originalIndex}>
-                  <td className="font-bold">{item.data[0]}</td>
-                  <td className="text-dim">{item.data[1]}</td>
-                  <td><span className="chip">{item.data[4]}</span></td>
-                  <td className="value-cell">
-                      {targetCurrency === 'PKR' ? `Rs. ${Number(item.data[3]).toLocaleString()}` : convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  <td>
+                    <button className="action-icon-btn" onClick={() => toggleSelect(item.originalIndex)}>
+                      {selectedIndices.includes(item.originalIndex) ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} color="#64748b" />}
+                    </button>
                   </td>
+                  <td className="font-bold">{item.data[0]}</td>
+                  <td>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                      {item.data[1]}
+                      <button className="action-icon-btn" title="Select all for this client" onClick={() => selectAllForClient(item.data[1])}>
+                        <ListChecks size={14} color="#60a5fa" />
+                      </button>
+                    </div>
+                  </td>
+                  <td><span className="chip">{item.data[4]}</span></td>
+                  <td className="value-cell">{targetCurrency === 'PKR' ? `Rs. ${Number(item.data[3]).toLocaleString()}` : convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                   <td style={{textAlign: 'center'}}>
                     {view === 'active' ? (
                       <>
-                        <button onClick={() => startEdit(item)} className="action-icon-btn"><Edit3 size={16} color="#60a5fa"/></button>
-                        <button onClick={() => deleteProject(item.originalIndex)} className="action-icon-btn"><Trash2 size={16} color="#ef4444"/></button>
+                        <button onClick={() => generatePDF([item])} className="action-icon-btn" title="Export PDF"><FileText size={16} color="#60a5fa"/></button>
+                        <button onClick={() => startEdit(item)} className="action-icon-btn" title="Edit"><Edit3 size={16} color="#3b82f6"/></button>
+                        <button onClick={() => deleteProject(item.originalIndex)} className="action-icon-btn" title="Archive"><Trash2 size={16} color="#ef4444"/></button>
                       </>
                     ) : (
                       <button onClick={() => restoreProject(item.originalIndex)} className="action-icon-btn" title="Restore Project"><RotateCcw size={16} color="#10b981"/></button>
@@ -279,7 +317,6 @@ export default function App() {
             </AnimatePresence>
           </tbody>
         </table>
-        {filteredProjects.length === 0 && <div className="empty-state">No matching projects found in {view}.</div>}
       </div>
     </div>
   );
