@@ -9,10 +9,14 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './App.css';
 
+// Using environment variables for security [cite: 5]
 const SHEET_ID = import.meta.env.VITE_SHEET_ID;
 const API_KEY = import.meta.env.VITE_API_KEY;
-const RANGE = "Sheet1!A2:E50"; // Range is fine to keep here
+const RANGE = "Sheet1!A2:E50"; 
 const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL;
+const GITHUB_URL = import.meta.env.VITE_GITHUB_URL;
+const LINKEDIN_URL = import.meta.env.VITE_LINKEDIN_URL;
+
 export default function App() {
   const [projects, setProjects] = useState([]);
   const [selectedIndices, setSelectedIndices] = useState([]); 
@@ -62,7 +66,6 @@ export default function App() {
     return Number(pkrAmount) * rate;
   };
 
-  // --- PDF LOGIC (With Totals & Unique Clients) ---
   const generatePDF = (items) => {
     if (!items || items.length === 0) return;
     
@@ -98,7 +101,6 @@ export default function App() {
           : `${convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`
       ]);
 
-      // Add Total Row to PDF Table
       tableBody.push([
         { content: 'TOTAL AMOUNT', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
         { content: formattedTotal, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }
@@ -125,7 +127,6 @@ export default function App() {
     }
   };
 
-  // --- SELECTION LOGIC ---
   const toggleSelect = (idx) => {
     setSelectedIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
   };
@@ -146,7 +147,6 @@ export default function App() {
     setSelectedIndices(prev => Array.from(new Set([...prev, ...clientIndices])));
   };
 
-  // Calculate selection sum for UI floating bar
   const selectedTotalRaw = projects
     .filter(p => selectedIndices.includes(p.originalIndex))
     .reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
@@ -168,11 +168,6 @@ export default function App() {
       setSuggestions(matches);
       setShowSuggestions(true);
     } else { setShowSuggestions(false); }
-  };
-
-  const selectSuggestion = (val) => {
-    setSearchQuery(val);
-    setShowSuggestions(false);
   };
 
   const filteredProjects = projects.filter(item => {
@@ -344,7 +339,7 @@ export default function App() {
         </table>
       </div>
 
-      {/* Floating Selection Bar */}
+      {/* Floating Selection Bar placed above footer logic */}
       <AnimatePresence>
         {selectedIndices.length > 0 && (
           <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="selection-bar">
@@ -359,6 +354,22 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <footer className="footer">
+        <div className="footer-content">
+          <div className="footer-left">
+            <p>© 2026 FreelanceFlow. Developed by <span>Shahroz Imran</span></p>
+          </div>
+          <div className="footer-center">
+            <p>AI and ML Specialist</p>
+          </div>
+          <div className="footer-right">
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="footer-link">GitHub</a>
+            <span className="footer-divider">|</span>
+            <a href={LINKEDIN_URL} target="_blank" rel="noreferrer" className="footer-link">LinkedIn</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

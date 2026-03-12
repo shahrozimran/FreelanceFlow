@@ -2,7 +2,10 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 20px;
-  padding-bottom: 100px; /* Extra space so the floating bar doesn't cover content */
+  /* Flexbox ensures the footer stays at the bottom of the viewport */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .top-nav {
@@ -192,12 +195,11 @@
   background: rgba(239, 68, 68, 0.1) !important;
 }
 
-/* --- Floating Selection Bar --- */
+/* --- Selection Bar --- */
+/* UPDATED: Changed from fixed to relative to sit above footer naturally */
 .selection-bar {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
+  margin: 30px auto; 
   background: #161b2b;
   border: 2px solid #3b82f6;
   border-radius: 16px;
@@ -206,9 +208,13 @@
   justify-content: space-between;
   align-items: center;
   gap: 60px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-  z-index: 2000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 10;
   min-width: 450px;
+  /* Reset fixed positioning */
+  bottom: auto;
+  left: auto;
+  transform: none;
 }
 
 .selection-info {
@@ -337,16 +343,6 @@ td {
   border-bottom: 1px solid #1e293b;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: #64748b;
-  font-style: italic;
-}
-
-.text-dim { color: #94a3b8; }
-.font-bold { font-weight: 700; }
-
 .chip {
   background: rgba(59, 130, 246, 0.1);
   color: #60a5fa;
@@ -380,10 +376,6 @@ td {
   transform: scale(1.1);
 }
 
-.action-icon-btn[title="Restore Project"]:hover {
-  background: rgba(16, 185, 129, 0.1);
-}
-
 .spin {
   animation: rotation 1s infinite linear;
 }
@@ -393,6 +385,56 @@ td {
   to { transform: rotate(360deg); }
 }
 
+/* --- Footer Styles --- */
+.footer {
+  margin-top: auto; /* Pushes footer to bottom of Flex container */
+  padding: 40px 0 20px 0;
+  border-top: 1px solid #2d364d;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  background: transparent;
+  position: relative;
+  z-index: 1000;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.footer-left span {
+  color: #3b82f6;
+  font-weight: 700;
+}
+
+.footer-center {
+  font-style: italic;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-link {
+  color: #94a3b8;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.footer-link:hover {
+  color: #3b82f6;
+  transform: translateY(-1px);
+}
+
+/* --- Media Queries --- */
 @media (max-width: 768px) {
   .top-nav {
     flex-direction: column;
@@ -404,15 +446,17 @@ td {
     justify-content: space-between;
   }
 
-  .search-wrapper {
-    max-width: 100%;
-  }
-
   .selection-bar {
-    width: 90%;
+    width: 100%;
     min-width: unset;
     flex-direction: column;
-    gap: 10px;
+    gap: 15px;
     padding: 16px;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
   }
 }
