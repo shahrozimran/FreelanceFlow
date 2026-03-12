@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable'; // Updated import for manual registration
+import autoTable from 'jspdf-autotable';
 import './App.css';
 
 const SHEET_ID = "1ks1kqNq6rHshI-WUr9YYzQzCGLtzF5Nvrocxo972Fio"; 
@@ -63,16 +63,19 @@ export default function App() {
     return Number(pkrAmount) * rate;
   };
 
-  // --- UPDATED PDF LOGIC (Manual Registration) ---
   const generatePDF = (items) => {
     if (!items || items.length === 0) return;
     
     try {
       const doc = new jsPDF();
       const date = new Date().toLocaleDateString();
-      const clientName = items[0].data[1];
+      const uniqueClients = [...new Set(items.map(item => item.data[1]))].join(", ");
 
-      // Header Branding
+      const totalSum = items.reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
+      const formattedTotal = targetCurrency === 'PKR' 
+        ? `Rs. ${totalSum.toLocaleString()}` 
+        : `${convert(totalSum).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
+
       doc.setFillColor(59, 130, 246);
       doc.rect(0, 0, 210, 40, 'F');
       doc.setTextColor(255, 255, 255);
@@ -80,47 +83,59 @@ export default function App() {
       doc.setFont("helvetica", "bold");
       doc.text("FreelanceFlow", 20, 25);
       doc.setFontSize(10);
-      doc.text(items.length > 1 ? "BULK PROJECT SUMMARY" : "PROJECT INVOICE", 140, 25);
+      doc.text(items.length > 1 ? "MULTI-PROJECT SUMMARY" : "PROJECT INVOICE", 140, 25);
 
-      // Client Details
       doc.setTextColor(40, 40, 40);
       doc.setFontSize(12);
-      doc.text(`Client: ${clientName}`, 20, 60);
-      doc.text(`Date: ${date}`, 20, 68);
+      doc.text(`Client(s): ${uniqueClients}`, 20, 60);
+      doc.text(`Date Generated: ${date}`, 20, 68);
 
-      // Map Items for Table
       const tableBody = items.map(item => [
         item.data[0],
+        item.data[1],
         item.data[4],
         targetCurrency === 'PKR' 
           ? `Rs. ${Number(item.data[3]).toLocaleString()}` 
           : `${convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`
       ]);
 
-      // Call autoTable directly as a function
+      tableBody.push([
+        { content: 'TOTAL AMOUNT', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
+        { content: formattedTotal, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }
+      ]);
+
       autoTable(doc, {
         startY: 80,
-        head: [['Project Name', 'Category', 'Total Value']],
+        head: [['Project', 'Client', 'Category', 'Value']],
         body: tableBody,
         headStyles: { fillColor: [59, 130, 246] },
         theme: 'grid'
       });
 
-      // Calculate final position
       const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 150;
       doc.setFontSize(10);
       doc.text("Thank you for your business!", 20, finalY);
       
-      doc.save(`${clientName.replace(/\s+/g, '_')}_FF_Invoice.pdf`);
-      setSelectedIndices([]); // Reset selection
+      const fileName = items.length > 1 ? "Bulk_Invoice_Summary" : `${items[0].data[1]}_FF_Invoice`;
+      doc.save(`${fileName.replace(/\s+/g, '_')}.pdf`);
+      setSelectedIndices([]); 
     } catch (error) {
-      console.error("PDF Generation Error:", error);
-      alert("Failed to generate PDF. Make sure jspdf-autotable is installed.");
+      console.error("PDF Export Error:", error);
+      alert("Failed to generate PDF.");
     }
   };
 
   const toggleSelect = (idx) => {
     setSelectedIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIndices.length === filteredProjects.length) {
+      setSelectedIndices([]);
+    } else {
+      const allIndices = filteredProjects.map(p => p.originalIndex);
+      setSelectedIndices(allIndices);
+    }
   };
 
   const selectAllForClient = (clientName) => {
@@ -161,7 +176,7 @@ export default function App() {
   });
 
   const deleteProject = async (originalIndex) => {
-    if (!window.confirm("Archive this project?")) return;
+    if (!window.confirm("Archive project?")) return;
     setProjects(prev => prev.filter(item => item.originalIndex !== originalIndex));
     try {
       await axios.post(SCRIPT_URL, JSON.stringify({ action: "DELETE", rowIndex: originalIndex }));
@@ -174,7 +189,7 @@ export default function App() {
     try {
       await axios.post(SCRIPT_URL, JSON.stringify({ action: "RESTORE", rowIndex: originalIndex }));
       setTimeout(() => { fetchData(); setView('active'); }, 1500);
-    } catch (err) { alert("Restore failed. Check Apps Script."); setLoading(false); }
+    } catch (err) { alert("Restore failed."); setLoading(false); }
   };
 
   const handleSubmit = async (e) => {
@@ -210,12 +225,12 @@ export default function App() {
         <div className="brand"><TrendingUp className="logo-icon" size={28} /><h1>Freelance<span>Flow</span></h1></div>
         <div className="actions">
           {selectedIndices.length > 0 && (
-            <button className="toggle-btn" style={{background: '#10b981', border: 'none', color: 'white'}} onClick={() => generatePDF(projects.filter(p => selectedIndices.includes(p.originalIndex)))}>
+            <button className="toggle-btn" style={{background: '#10b981', color: 'white', border: 'none'}} onClick={() => generatePDF(projects.filter(p => selectedIndices.includes(p.originalIndex)))}>
               <FileText size={18} /> Export Selected ({selectedIndices.length})
             </button>
           )}
           <button className={`toggle-btn ${view === 'trash' ? 'active-trash' : ''}`} onClick={() => setView(view === 'active' ? 'trash' : 'active')}>
-            {view === 'active' ? <Archive size={18} /> : <Briefcase size={18} />} {view === 'active' ? "Trash" : "Back to Active"}
+            {view === 'active' ? <Archive size={18} /> : <Briefcase size={18} />} {view === 'active' ? "Trash" : "Active Pipeline"}
           </button>
           <div className="currency-selector-wrapper">
             <Globe size={16} className="globe-icon" />
@@ -241,7 +256,7 @@ export default function App() {
         <AnimatePresence>
           {showSuggestions && suggestions.length > 0 && (
             <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="suggestion-dropdown">
-              {suggestions.map((item, i) => <li key={i} onClick={() => selectSuggestion(item)} className="suggestion-item"><Search size={14} style={{marginRight: '10px', opacity: 0.5}} />{item}</li>)}
+              {suggestions.map((item, i) => <li key={i} onClick={() => {setSearchQuery(item); setShowSuggestions(false);}} className="suggestion-item"><Search size={14} style={{marginRight: '10px', opacity: 0.5}} />{item}</li>)}
             </motion.ul>
           )}
         </AnimatePresence>
@@ -256,7 +271,7 @@ export default function App() {
               <input className="toggle-btn text-left" placeholder="Client Name" required value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
               <input className="toggle-btn text-left" type="number" placeholder="Earnings" required value={formData.earnings} onChange={e => setFormData({...formData, earnings: e.target.value})} />
               <input className="toggle-btn text-left" placeholder="Category" required value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
-              <button type="submit" className="refresh-btn submit-btn"><Save size={18} /> {isEditing !== null ? "Update Project" : "Save Project"}</button>
+              <button type="submit" className="refresh-btn submit-btn"><Save size={18} /> {isEditing !== null ? "Update" : "Save Project"}</button>
             </form>
           </motion.div>
         )}
@@ -264,16 +279,20 @@ export default function App() {
 
       <div className="grid">
         <StatCard title="Portfolio Value" value={formattedTotal} icon={<Wallet />} color="#10b981" />
-        <StatCard title={`${view === 'active' ? 'Active' : 'Archived'} Count`} value={filteredProjects.length} icon={<Briefcase />} color="#3b82f6" />
-        <StatCard title={`Rate: 1/${targetCurrency}`} value={allRates[targetCurrency]?.toFixed(4) || "0.00"} icon={<Activity />} color="#f59e0b" />
+        <StatCard title={`${view === 'active' ? 'Active' : 'Archived'} Projects`} value={filteredProjects.length} icon={<Briefcase />} color="#3b82f6" />
+        <StatCard title={`Live Rate (1 PKR)`} value={allRates[targetCurrency]?.toFixed(4) || "0.00"} icon={<Activity />} color="#f59e0b" />
       </div>
 
       <div className="table-container">
-        <div className="table-header"><h2>{view === 'active' ? "Active Pipeline" : "Trash / Archive"}</h2></div>
+        <div className="table-header"><h2>{view === 'active' ? "Active Pipeline" : "Archive View"}</h2></div>
         <table>
           <thead>
             <tr>
-              <th style={{width: '50px'}}>SEL</th>
+              <th style={{width: '50px'}}>
+                <button className="action-icon-btn" onClick={handleSelectAll} title="Select/Deselect All Visible">
+                  {selectedIndices.length === filteredProjects.length && filteredProjects.length > 0 ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} color="#64748b" />}
+                </button>
+              </th>
               <th>PROJECT</th>
               <th>CLIENT</th>
               <th>CATEGORY</th>
@@ -309,7 +328,7 @@ export default function App() {
                         <button onClick={() => deleteProject(item.originalIndex)} className="action-icon-btn" title="Archive"><Trash2 size={16} color="#ef4444"/></button>
                       </>
                     ) : (
-                      <button onClick={() => restoreProject(item.originalIndex)} className="action-icon-btn" title="Restore Project"><RotateCcw size={16} color="#10b981"/></button>
+                      <button onClick={() => restoreProject(item.originalIndex)} className="action-icon-btn" title="Restore"><RotateCcw size={16} color="#10b981"/></button>
                     )}
                   </td>
                 </motion.tr>
