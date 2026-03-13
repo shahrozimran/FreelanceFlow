@@ -292,6 +292,31 @@
   margin-top: 15px;
 }
 
+/* --- Form Input Wrapper with Suggestions --- */
+.form-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.form-suggestion-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #161b2b;
+  border: 1px solid #3b82f6;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  list-style: none;
+  padding: 0;
+  margin-top: -5px;
+  z-index: 1050;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
 .submit-btn {
   grid-column: 1 / -1;
   justify-content: center;

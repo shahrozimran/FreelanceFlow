@@ -34,6 +34,9 @@ export default function App() {
   const suggestionRef = useRef(null);
 
   const [formData, setFormData] = useState({ name: '', client: '', earnings: '', category: '' });
+  const [formSuggestions, setFormSuggestions] = useState({ name: [], client: [], category: [] });
+  const [showFormSuggestions, setShowFormSuggestions] = useState({ name: false, client: false, category: false });
+  const formRef = useRef(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -54,6 +57,9 @@ export default function App() {
     const handleClickOutside = (e) => {
       if (suggestionRef.current && !suggestionRef.current.contains(e.target)) {
         setShowSuggestions(false);
+      }
+      if (formRef.current && !formRef.current.contains(e.target)) {
+        setShowFormSuggestions({ name: false, client: false, category: false });
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -238,6 +244,34 @@ export default function App() {
     } else { setShowSuggestions(false); }
   };
 
+  const getFormSuggestions = (fieldType, inputValue) => {
+    if (!inputValue || inputValue.length === 0) return [];
+    
+    let colIndex = fieldType === 'name' ? 0 : fieldType === 'client' ? 1 : 4;
+    const activeProjects = projects.filter(p => p.data[2] !== "Disabled");
+    
+    const matches = activeProjects
+      .map(p => p.data[colIndex])
+      .filter((val, index, self) => 
+        val && val.toLowerCase().includes(inputValue.toLowerCase()) && self.indexOf(val) === index
+      )
+      .slice(0, 5);
+    
+    return matches;
+  };
+
+  const handleFormInputChange = (fieldType, value) => {
+    setFormData({ ...formData, [fieldType]: value });
+    const suggestions = getFormSuggestions(fieldType, value);
+    setFormSuggestions({ ...formSuggestions, [fieldType]: suggestions });
+    setShowFormSuggestions({ ...showFormSuggestions, [fieldType]: suggestions.length > 0 });
+  };
+
+  const selectFormSuggestion = (fieldType, value) => {
+    setFormData({ ...formData, [fieldType]: value });
+    setShowFormSuggestions({ ...showFormSuggestions, [fieldType]: false });
+  };
+
   const filteredProjects = projects.filter(item => {
     const isCorrectView = view === 'active' ? item.data[2] !== "Disabled" : item.data[2] === "Disabled";
     if (!isCorrectView) return false;
@@ -305,13 +339,61 @@ export default function App() {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="stat-card form-box">
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="stat-card form-box" ref={formRef}>
             <h3 style={{marginTop: 0, color: '#60a5fa'}}>{isEditing !== null ? "Update Project" : "Add New Project"}</h3>
             <form onSubmit={handleSubmit} className="project-form">
-              <input className="toggle-btn text-left" placeholder="Project Name" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              <input className="toggle-btn text-left" placeholder="Client Name" required value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
+              <div className="form-input-wrapper">
+                <input 
+                  className="toggle-btn text-left" 
+                  placeholder="Project Name" 
+                  required 
+                  value={formData.name} 
+                  onChange={e => handleFormInputChange('name', e.target.value)}
+                  onFocus={() => formSuggestions.name.length > 0 && setShowFormSuggestions({ ...showFormSuggestions, name: true })}
+                />
+                <AnimatePresence>
+                  {showFormSuggestions.name && formSuggestions.name.length > 0 && (
+                    <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="form-suggestion-dropdown">
+                      {formSuggestions.name.map((item, i) => <li key={i} onClick={() => selectFormSuggestion('name', item)} className="suggestion-item"><Search size={14} style={{marginRight: '10px', opacity: 0.5}} />{item}</li>)}
+                    </motion.ul>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div className="form-input-wrapper">
+                <input 
+                  className="toggle-btn text-left" 
+                  placeholder="Client Name" 
+                  required 
+                  value={formData.client} 
+                  onChange={e => handleFormInputChange('client', e.target.value)}
+                  onFocus={() => formSuggestions.client.length > 0 && setShowFormSuggestions({ ...showFormSuggestions, client: true })}
+                />
+                <AnimatePresence>
+                  {showFormSuggestions.client && formSuggestions.client.length > 0 && (
+                    <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="form-suggestion-dropdown">
+                      {formSuggestions.client.map((item, i) => <li key={i} onClick={() => selectFormSuggestion('client', item)} className="suggestion-item"><Search size={14} style={{marginRight: '10px', opacity: 0.5}} />{item}</li>)}
+                    </motion.ul>
+                  )}
+                </AnimatePresence>
+              </div>
               <input className="toggle-btn text-left" type="number" placeholder="Earnings" required value={formData.earnings} onChange={e => setFormData({...formData, earnings: e.target.value})} />
-              <input className="toggle-btn text-left" placeholder="Category" required value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
+              <div className="form-input-wrapper">
+                <input 
+                  className="toggle-btn text-left" 
+                  placeholder="Category" 
+                  required 
+                  value={formData.category} 
+                  onChange={e => handleFormInputChange('category', e.target.value)}
+                  onFocus={() => formSuggestions.category.length > 0 && setShowFormSuggestions({ ...showFormSuggestions, category: true })}
+                />
+                <AnimatePresence>
+                  {showFormSuggestions.category && formSuggestions.category.length > 0 && (
+                    <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="form-suggestion-dropdown">
+                      {formSuggestions.category.map((item, i) => <li key={i} onClick={() => selectFormSuggestion('category', item)} className="suggestion-item"><Search size={14} style={{marginRight: '10px', opacity: 0.5}} />{item}</li>)}
+                    </motion.ul>
+                  )}
+                </AnimatePresence>
+              </div>
               <button type="submit" className="refresh-btn submit-btn"><Save size={18} /> {isEditing !== null ? "Update" : "Save Project"}</button>
             </form>
           </motion.div>
