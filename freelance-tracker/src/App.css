@@ -2,7 +2,6 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 20px;
-  /* Flexbox ensures the footer stays at the bottom of the viewport */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -41,6 +40,7 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap; /* Allows buttons to wrap on very small screens */
 }
 
 /* --- Search Bar Section --- */
@@ -182,6 +182,7 @@
   gap: 8px;
   height: 42px;
   transition: all 0.2s ease;
+  white-space: nowrap; /* Keeps text on one line */
 }
 
 .toggle-btn:hover, .refresh-btn:hover {
@@ -196,7 +197,6 @@
 }
 
 /* --- Selection Bar --- */
-/* UPDATED: Changed from fixed to relative to sit above footer naturally */
 .selection-bar {
   position: relative;
   margin: 30px auto; 
@@ -211,7 +211,6 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   z-index: 10;
   min-width: 450px;
-  /* Reset fixed positioning */
   bottom: auto;
   left: auto;
   transform: none;
@@ -249,8 +248,9 @@
 /* --- Stats Grid --- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
+  /* Updated for better responsiveness: 3 cols on desktop, 1 on mobile */
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
   margin-bottom: 40px;
 }
 
@@ -262,6 +262,11 @@
   display: flex;
   align-items: center;
   gap: 20px;
+  transition: transform 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
 }
 
 .stat-label {
@@ -334,7 +339,8 @@
   background: #161b2b;
   border: 1px solid #2d364d;
   border-radius: 20px;
-  overflow-x: auto;
+  overflow-x: auto; /* Crucial for mobile scrolling */
+  -webkit-overflow-scrolling: touch;
 }
 
 .table-header {
@@ -351,7 +357,7 @@
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 600px;
+  min-width: 700px; /* Forces a scroll on narrow screens instead of squishing text */
 }
 
 th {
@@ -412,7 +418,7 @@ td {
 
 /* --- Footer Styles --- */
 .footer {
-  margin-top: auto; /* Pushes footer to bottom of Flex container */
+  margin-top: auto; 
   padding: 40px 0 20px 0;
   border-top: 1px solid #2d364d;
   color: #94a3b8;
@@ -459,24 +465,47 @@ td {
   transform: translateY(-1px);
 }
 
-/* --- Media Queries --- */
+/* --- Improved Media Queries --- */
 @media (max-width: 768px) {
+  .dashboard {
+    padding: 20px 15px; /* Less side padding on mobile */
+  }
+
   .top-nav {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
   }
   
   .actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .actions .toggle-btn, .actions .refresh-btn {
+    flex: 1; /* Makes buttons grow equally to fill row */
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    justify-content: center;
+  }
+
+  .search-wrapper {
+    max-width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: 1fr; /* Single column for stat cards */
+    gap: 15px;
   }
 
   .selection-bar {
     width: 100%;
     min-width: unset;
     flex-direction: column;
-    gap: 15px;
+    gap: 10px;
     padding: 16px;
+    margin: 20px 0;
   }
 
   .footer-content {
@@ -484,4 +513,13 @@ td {
     text-align: center;
     gap: 15px;
   }
+}
+
+@media (max-width: 480px) {
+    .brand h1 {
+        font-size: 1.4rem;
+    }
+    .stat-val {
+        font-size: 1.3rem;
+    }
 }
