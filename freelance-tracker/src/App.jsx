@@ -9,7 +9,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './App.css';
 
-// Using environment variables for security [cite: 5]
+// Using environment variables for security
 const SHEET_ID = import.meta.env.VITE_SHEET_ID;
 const API_KEY = import.meta.env.VITE_API_KEY;
 const RANGE = "Sheet1!A2:E50"; 
@@ -66,9 +66,84 @@ export default function App() {
     return Number(pkrAmount) * rate;
   };
 
+  // --- OPTIMISTIC UI ACTIONS WITH DATA NORMALIZATION ---
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Helper: Proper Case capitalization to solve case-sensitivity issues
+    const normalize = (str) => 
+      str ? str.trim().toLowerCase().split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : "";
+
+    const cleanName = normalize(formData.name);
+    const cleanClient = normalize(formData.client);
+    const cleanCategory = normalize(formData.category);
+
+    const actionType = isEditing !== null ? "UPDATE" : "ADD";
+    
+    const normalizedData = {
+      ...formData,
+      name: cleanName,
+      client: cleanClient,
+      category: cleanCategory,
+      action: actionType,
+      rowIndex: isEditing
+    };
+
+    const optimisticProject = {
+      data: [cleanName, cleanClient, "Active", formData.earnings, cleanCategory],
+      originalIndex: isEditing !== null ? isEditing : projects.length
+    };
+    
+    const previousProjects = [...projects];
+
+    if (actionType === "ADD") {
+      setProjects([optimisticProject, ...projects]);
+    } else {
+      setProjects(projects.map(p => p.originalIndex === isEditing ? optimisticProject : p));
+    }
+
+    resetForm();
+
+    try {
+      await axios.post(SCRIPT_URL, JSON.stringify(normalizedData));
+      fetchData(); 
+    } catch (err) {
+      alert("Sync failed. Rolling back changes.");
+      setProjects(previousProjects);
+    }
+  };
+
+  const deleteProject = async (originalIndex) => {
+    if (!window.confirm("Archive project?")) return;
+    const previousProjects = [...projects];
+    setProjects(projects.map(p => p.originalIndex === originalIndex ? { ...p, data: [p.data[0], p.data[1], "Disabled", p.data[3], p.data[4]] } : p));
+    try {
+      await axios.post(SCRIPT_URL, JSON.stringify({ action: "DELETE", rowIndex: originalIndex }));
+    } catch (err) {
+      setProjects(previousProjects);
+      alert("Archive failed.");
+    }
+  };
+
+  const restoreProject = async (originalIndex) => {
+    const previousProjects = [...projects];
+    setProjects(projects.map(p => p.originalIndex === originalIndex ? { ...p, data: [p.data[0], p.data[1], "Active", p.data[3], p.data[4]] } : p));
+    try {
+      await axios.post(SCRIPT_URL, JSON.stringify({ action: "RESTORE", rowIndex: originalIndex }));
+    } catch (err) {
+      setProjects(previousProjects);
+      alert("Restore failed.");
+    }
+  };
+
+  // --- PDF GENERATION WITH NOTE WINDOW AND SIGNATURE ---
   const generatePDF = (items) => {
     if (!items || items.length === 0) return;
-    
+
+    // Open window to enter optional note
+    const userNote = window.prompt("Enter a custom note for this invoice (Optional):");
+
     try {
       const doc = new jsPDF();
       const date = new Date().toLocaleDateString();
@@ -96,75 +171,68 @@ export default function App() {
         item.data[0],
         item.data[1],
         item.data[4],
-        targetCurrency === 'PKR' 
-          ? `Rs. ${Number(item.data[3]).toLocaleString()}` 
-          : `${convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`
+        targetCurrency === 'PKR' ? `Rs. ${Number(item.data[3]).toLocaleString()}` : `${convert(item.data[3]).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`
       ]);
 
-      tableBody.push([
-        { content: 'TOTAL AMOUNT', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-        { content: formattedTotal, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }
-      ]);
+      tableBody.push([{ content: 'TOTAL AMOUNT', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } }, { content: formattedTotal, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }]);
 
-      autoTable(doc, {
-        startY: 80,
-        head: [['Project', 'Client', 'Category', 'Value']],
-        body: tableBody,
-        headStyles: { fillColor: [59, 130, 246] },
-        theme: 'grid'
-      });
+      autoTable(doc, { startY: 80, head: [['Project', 'Client', 'Category', 'Value']], body: tableBody, headStyles: { fillColor: [59, 130, 246] }, theme: 'grid' });
 
-      const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 150;
-      doc.setFontSize(10);
-      doc.text("Thank you for your business!", 20, finalY);
-      
-      const fileName = items.length > 1 ? "Bulk_Invoice_Summary" : `${items[0].data[1]}_FF_Invoice`;
+      // After Table content
+      let currentY = doc.lastAutoTable.finalY + 15;
+
+      // Add User Note if entered
+      if (userNote && userNote.trim() !== "") {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Note:", 20, currentY);
+        doc.setFont("helvetica", "normal");
+        const splitNote = doc.splitTextToSize(userNote, 170);
+        doc.text(splitNote, 20, currentY + 7);
+        currentY += (splitNote.length * 7) + 15;
+      }
+
+      // Professional Signature/Regards
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Regards,", 20, currentY);
+      doc.setTextColor(59, 130, 246);
+      doc.text("Shahroz Imran", 20, currentY + 7);
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont("helvetica", "normal");
+      doc.text("AI Automation & Cybersecurity Specialist", 20, currentY + 12);
+
+      const fileName = items.length > 1 ? "Bulk_Invoice" : `${items[0].data[1]}_Invoice`;
       doc.save(`${fileName.replace(/\s+/g, '_')}.pdf`);
       setSelectedIndices([]); 
-    } catch (error) {
-      console.error("PDF Export Error:", error);
-      alert("Failed to generate PDF.");
-    }
+    } catch (error) { console.error("PDF Error:", error); }
   };
 
+  // --- UI HELPERS ---
   const toggleSelect = (idx) => {
     setSelectedIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
   };
 
   const handleSelectAll = () => {
-    if (selectedIndices.length === filteredProjects.length) {
-      setSelectedIndices([]);
-    } else {
-      const allIndices = filteredProjects.map(p => p.originalIndex);
-      setSelectedIndices(allIndices);
-    }
+    if (selectedIndices.length === filteredProjects.length) setSelectedIndices([]);
+    else setSelectedIndices(filteredProjects.map(p => p.originalIndex));
   };
 
   const selectAllForClient = (clientName) => {
-    const clientIndices = filteredProjects
-      .filter(p => p.data[1] === clientName)
-      .map(p => p.originalIndex);
+    const clientIndices = filteredProjects.filter(p => p.data[1] === clientName).map(p => p.originalIndex);
     setSelectedIndices(prev => Array.from(new Set([...prev, ...clientIndices])));
   };
 
-  const selectedTotalRaw = projects
-    .filter(p => selectedIndices.includes(p.originalIndex))
-    .reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
-  
-  const selectedTotalFormatted = targetCurrency === 'PKR' 
-    ? `Rs. ${selectedTotalRaw.toLocaleString()}` 
-    : `${convert(selectedTotalRaw).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
+  const selectedTotalRaw = projects.filter(p => selectedIndices.includes(p.originalIndex)).reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
+  const selectedTotalFormatted = targetCurrency === 'PKR' ? `Rs. ${selectedTotalRaw.toLocaleString()}` : `${convert(selectedTotalRaw).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
     if (value.length > 0) {
       const colIndex = searchCriteria === 'name' ? 0 : searchCriteria === 'client' ? 1 : 4;
-      const matches = projects
-        .filter(p => (view === 'active' ? p.data[2] !== "Disabled" : p.data[2] === "Disabled"))
-        .map(p => p.data[colIndex])
-        .filter((val, index, self) => val && val.toLowerCase().includes(value.toLowerCase()) && self.indexOf(val) === index)
-        .slice(0, 5);
+      const matches = projects.filter(p => (view === 'active' ? p.data[2] !== "Disabled" : p.data[2] === "Disabled")).map(p => p.data[colIndex]).filter((val, index, self) => val && val.toLowerCase().includes(value.toLowerCase()) && self.indexOf(val) === index).slice(0, 5);
       setSuggestions(matches);
       setShowSuggestions(true);
     } else { setShowSuggestions(false); }
@@ -180,34 +248,6 @@ export default function App() {
     return true;
   });
 
-  const deleteProject = async (originalIndex) => {
-    if (!window.confirm("Archive project?")) return;
-    setProjects(prev => prev.filter(item => item.originalIndex !== originalIndex));
-    try {
-      await axios.post(SCRIPT_URL, JSON.stringify({ action: "DELETE", rowIndex: originalIndex }));
-      setTimeout(fetchData, 1500);
-    } catch (err) { fetchData(); }
-  };
-
-  const restoreProject = async (originalIndex) => {
-    setLoading(true);
-    try {
-      await axios.post(SCRIPT_URL, JSON.stringify({ action: "RESTORE", rowIndex: originalIndex }));
-      setTimeout(() => { fetchData(); setView('active'); }, 1500);
-    } catch (err) { alert("Restore failed."); setLoading(false); }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    const payload = { ...formData, action: isEditing !== null ? "UPDATE" : "ADD", rowIndex: isEditing };
-    try {
-      await axios.post(SCRIPT_URL, JSON.stringify(payload));
-      resetForm();
-      setTimeout(fetchData, 2000); 
-    } catch (err) { alert("Action failed."); setLoading(false); }
-  };
-
   const startEdit = (item) => {
     setFormData({ name: item.data[0], client: item.data[1], earnings: item.data[3], category: item.data[4] });
     setIsEditing(item.originalIndex);
@@ -215,11 +255,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const resetForm = () => {
-    setFormData({ name: '', client: '', earnings: '', category: '' });
-    setIsEditing(null);
-    setShowForm(false);
-  };
+  const resetForm = () => { setFormData({ name: '', client: '', earnings: '', category: '' }); setIsEditing(null); setShowForm(false); };
 
   const totalPKR = projects.filter(p => p.data[2] !== "Disabled").reduce((sum, item) => sum + Number(item.data[3] || 0), 0);
   const formattedTotal = targetCurrency === 'PKR' ? `Rs. ${totalPKR.toLocaleString()}` : `${convert(totalPKR).toLocaleString(undefined, {minimumFractionDigits: 2})} ${targetCurrency}`;
@@ -253,7 +289,7 @@ export default function App() {
       <div className="search-container" ref={suggestionRef}>
         <div className="search-wrapper">
           <Search size={18} className="search-icon" />
-          <input type="text" placeholder={`Search by ${searchCriteria}...`} value={searchQuery} onChange={handleSearchChange} onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)} className="search-input" />
+          <input type="text" placeholder={`Search...`} value={searchQuery} onChange={handleSearchChange} onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)} className="search-input" />
           <select className="search-criteria-select" value={searchCriteria} onChange={(e) => setSearchCriteria(e.target.value)}>
             <option value="name">Project</option><option value="client">Client</option><option value="category">Category</option>
           </select>
@@ -293,11 +329,7 @@ export default function App() {
         <table>
           <thead>
             <tr>
-              <th style={{width: '50px'}}>
-                <button className="action-icon-btn" onClick={handleSelectAll} title="Select/Deselect All Visible">
-                  {selectedIndices.length === filteredProjects.length && filteredProjects.length > 0 ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} color="#64748b" />}
-                </button>
-              </th>
+              <th style={{width: '50px'}}><button className="action-icon-btn" onClick={handleSelectAll}>{selectedIndices.length === filteredProjects.length && filteredProjects.length > 0 ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} />}</button></th>
               <th>PROJECT</th><th>CLIENT</th><th>CATEGORY</th><th style={{textAlign: 'right'}}>VALUE</th><th style={{textAlign: 'center'}}>ACTIONS</th>
             </tr>
           </thead>
@@ -305,16 +337,12 @@ export default function App() {
             <AnimatePresence>
               {filteredProjects.map((item) => (
                 <motion.tr layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key={item.originalIndex}>
-                  <td>
-                    <button className="action-icon-btn" onClick={() => toggleSelect(item.originalIndex)}>
-                      {selectedIndices.includes(item.originalIndex) ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} color="#64748b" />}
-                    </button>
-                  </td>
+                  <td><button className="action-icon-btn" onClick={() => toggleSelect(item.originalIndex)}>{selectedIndices.includes(item.originalIndex) ? <CheckSquare size={18} color="#3b82f6" /> : <Square size={18} />}</button></td>
                   <td className="font-bold">{item.data[0]}</td>
                   <td>
                     <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
                       {item.data[1]}
-                      <button className="action-icon-btn" title="Select all for this client" onClick={() => selectAllForClient(item.data[1])}>
+                      <button className="action-icon-btn" title="Select all for client" onClick={() => selectAllForClient(item.data[1])}>
                         <ListChecks size={14} color="#60a5fa" />
                       </button>
                     </div>
@@ -339,30 +367,24 @@ export default function App() {
         </table>
       </div>
 
-      {/* Floating Selection Bar placed above footer logic */}
       <AnimatePresence>
         {selectedIndices.length > 0 && (
-          <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="selection-bar">
-            <div className="selection-info">
-              <Info size={18} color="#3b82f6" />
-              <span>{selectedIndices.length} items selected</span>
-            </div>
-            <div className="selection-sum">
-              <span className="sum-label">Selected Total:</span>
-              <span className="sum-value">{selectedTotalFormatted}</span>
-            </div>
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: 10 }} 
+            className="selection-bar"
+          >
+            <div className="selection-info"><Info size={18} color="#3b82f6" /><span>{selectedIndices.length} items selected</span></div>
+            <div className="selection-sum"><span className="sum-label">Selected Total:</span><span className="sum-value">{selectedTotalFormatted}</span></div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <footer className="footer">
         <div className="footer-content">
-          <div className="footer-left">
-            <p>© 2026 FreelanceFlow. Developed by <span>Shahroz Imran</span></p>
-          </div>
-          <div className="footer-center">
-            <p>AI and ML Specialist</p>
-          </div>
+          <div className="footer-left"><p>© 2026 FreelanceFlow. Developed by <span>Shahroz Imran</span></p></div>
+          <div className="footer-center"><p>AI Automation & Cybersecurity Specialist</p></div>
           <div className="footer-right">
             <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="footer-link">GitHub</a>
             <span className="footer-divider">|</span>
