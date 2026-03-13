@@ -1,29 +1,25 @@
 # 📈 FreelanceFlow: Smart Business Dashboard
 
-FreelanceFlow is a professional-grade project management and financial tracking dashboard built with **React** and **Google Sheets API**. Designed specifically for AI Automation experts and freelancers, it offers real-time currency conversion, automated bookkeeping, and advanced multi-client PDF invoice generation.
-
-
+FreelanceFlow is a professional-grade project management and financial tracking dashboard built with **React** and **Google Sheets API**. Designed specifically for AI Automation experts and freelancers, it offers a lightning-fast user experience through optimistic updates and advanced multi-client reporting.
 
 ## 🚀 Key Features
 
-* [cite_start]**Live Google Sheets Sync:** Uses Google Apps Script as a backend for real-time CRUD operations: Add, Update, Archive, and Restore[cite: 1].
-* [cite_start]**Global Currency Switcher:** Instant conversion of earnings from PKR to any global currency using live exchange rates[cite: 1].
-* [cite_start]**Advanced Search & Autocomplete:** "Google-style" search suggestions with filters for Project Name, Client, or Category[cite: 1].
-* [cite_start]**Soft-Delete & Trash System:** Archive projects to a "Trash" view to maintain data integrity with instant restoration capability[cite: 1].
-* [cite_start]**Bulk PDF Export & Selection:** Select multiple records across different clients to generate a grouped summary report[cite: 1].
-* [cite_start]**Unique Client Grouping:** Automatically detects and lists unique client names in the header of multi-project exports[cite: 1].
-* [cite_start]**Automated Financial Summing:** Exported PDFs now automatically calculate and display the **Total Amount** at the bottom of the invoice table[cite: 1].
-* [cite_start]**Responsive Dark UI:** Sleek, modern interface built with Tailwind-style CSS and Framer Motion for smooth animations[cite: 1].
+* **Lightning-Fast Optimistic UI:** Add, Update, and Archive operations now happen instantly (~16ms). The app updates your screen first and syncs with Google Sheets in the background.
+* **Intelligent Data Normalization:** Automatically converts Project, Client, and Category names to **Proper Case** (e.g., "web app" → "Web App") to prevent duplicate entities and maintain data consistency.
+* **Form Autosuggest:** Field-specific suggestions for Project Names, Clients, and Earnings based on your existing data to speed up entry.
+* **Interactive PDF Exports:** * **Custom Notes:** A popup window allows you to add unique instructions or notes to each invoice before generation.
+    * **Bulk Selection:** Group multiple projects into one professional summary report.
+    * **Professional Signature:** Every export includes a branded "Regards" block with your specialist title.
+* **Global Currency Switcher:** Instant conversion of earnings from PKR to any global currency using live exchange rates.
+* **Soft-Delete & Trash System:** Maintain data integrity with an archive view and instant restoration capability.
 
 ## 🛠️ Tech Stack
 
 * **Frontend:** React.js, Framer Motion (Animations), Lucide React (Icons).
-* [cite_start]**Backend:** Google Apps Script (Serverless)[cite: 1].
-* [cite_start]**Database:** Google Sheets (Cloud Storage)[cite: 1].
+* **Backend:** Google Apps Script (Serverless).
+* **Database:** Google Sheets (Cloud Storage).
 * **APIs:** Google Sheets API v4, Open Exchange Rates API.
-* [cite_start]**PDF Engine:** jsPDF, jspdf-autotable (Manual Plugin Registration for Vite compatibility)[cite: 1].
-
-
+* **PDF Engine:** jsPDF, jspdf-autotable.
 
 ## 📋 Prerequisites
 
@@ -31,57 +27,58 @@ Before running the project locally, ensure you have:
 * **Node.js** installed.
 * A **Google Cloud Project** with the Sheets API enabled.
 * A **Google Sheet** set up with the following columns: 
-    `Project Name | Client | Status | Earnings (PKR) | [cite_start]Category` [cite: 1]
+    `Project Name | Client | Status | Earnings (PKR) | Category`
 
 ## ⚙️ Installation & Setup
 
-1. **Clone the Repository:**
+1.  **Clone the Repository:**
     ```bash
     git clone [https://github.com/shahrozimran/FreelanceFlow.git](https://github.com/shahrozimran/FreelanceFlow.git)
     cd FreelanceFlow
     ```
 
-2. **Install Dependencies:**
+2.  **Install Dependencies:**
     ```bash
     npm install
-    npm install jspdf jspdf-autotable
     ```
 
-3. **Configure Environment Variables:**
-    Create a `.env` file in the root directory and add your keys:
+3.  **Configure Environment Variables:**
+    Create a `.env` file in the root directory (this file is git-ignored for security):
     ```env
     VITE_SHEET_ID=your_google_sheet_id
     VITE_API_KEY=your_google_cloud_api_key
     VITE_SCRIPT_URL=your_deployed_apps_script_url
+    VITE_GITHUB_URL=[https://github.com/shahrozimran](https://github.com/shahrozimran)
+    VITE_LINKEDIN_URL=your_linkedin_profile_url
     ```
 
-4. **Run Locally:**
+4.  **Run Locally:**
     ```bash
     npm run dev
     ```
 
 ## 📄 Apps Script Backend
 
-The backend logic is handled via a deployed Web App script. It manages the `POST` requests for different actions:
+The backend logic is handled via a deployed Web App script. It manages `POST` requests for different actions:
 
-* [cite_start]`ADD`: Appends a new project row with "Active" status[cite: 1].
-* [cite_start]`UPDATE`: Modifies existing project details[cite: 1].
-* [cite_start]`DELETE`: Marks a project status as `Disabled` (Soft Delete)[cite: 1].
-* [cite_start]`RESTORE`: Re-activates an archived project to the main view[cite: 1].
+* `ADD`: Appends a new project row with "Active" status.
+* `UPDATE`: Modifies existing project details with normalized text.
+* `DELETE`: Marks a project status as `Disabled` (Soft Delete).
+* `RESTORE`: Re-activates an archived project to the main view.
 
-## 🛡️ Security Note
+## 🛡️ Security & Performance Note
 
-As a cybersecurity student, I have ensured that:
-* [cite_start]**Environment Isolation:** API keys and sensitive IDs are handled strictly via environment variables[cite: 1].
-* [cite_start]**Data Integrity:** The "Soft Delete" mechanism prevents accidental permanent data loss[cite: 1].
-* [cite_start]**Sanitized Reporting:** PDF generation dynamically calculates totals from the frontend state to ensure accuracy[cite: 1].
+As a cybersecurity student, I have implemented:
+* **Environment Isolation:** All sensitive identifiers (API keys, Sheet IDs) and personal social links are strictly handled via `.env` files.
+* **Data Integrity:** Input normalization ensures strings like "usman" and "Usman" are never treated as different entities, preventing data fragmentation.
+* **Non-Blocking Workflow:** UI updates are decoupled from API latency, providing a premium, high-speed user experience.
 
 ## 👨‍💻 Author
 
 **Shahroz Imran**
-* [cite_start]Artificial Intelligence Student @ UCP [cite: 1]
-* [cite_start]Cybersecurity & Ethical Hacking Enthusiast [cite: 1]
-* [cite_start]AI Automation & E-commerce Expert [cite: 1]
+* Artificial Intelligence Student @ UCP
+* Cybersecurity & Ethical Hacking Enthusiast
+* AI Automation & E-commerce Expert
 
 ---
-*Generated for FreelanceFlow - Version 2.1 (Multi-Export Update)*
+*Generated for FreelanceFlow - Version 3.0 (Performance & Normalization Update)*
